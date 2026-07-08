@@ -11,7 +11,7 @@ export const maxDuration = 60;
 import { NextResponse } from "next/server";
 import {
   searchDeals,
-  getOverdueTasks,
+  getOpenTasks,
   getPrimaryContact,
   hubspotDealUrl,
   getOwnersMap,
@@ -81,7 +81,6 @@ export async function GET(request: Request) {
     // limit — running everything sequentially risked timing out). Rate-limit
     // resilience now lives in lib/hubspot.ts (automatic retry on 429) instead
     // of manual delays here.
-    let overdueTasksResult: { results: any[]; total: number } = { results: [], total: 0 };
 
     const [
       closingSheetRows,
@@ -225,15 +224,28 @@ export async function GET(request: Request) {
       scope === "team" ? getOwnersMap() : Promise.resolve({} as Record<string, string>),
     ]);
 
-    // Overdue tasks require the crm.objects.tasks.read scope. If the key doesn't
-    // have it, this fails — we don't want that to break the whole page, so it's
-    // fetched separately and degrades gracefully to an empty list.
+    // Tasks require the crm.objects.tasks.read (and write, for completing them)
+    // scope. If the key doesn't have it, this fails — we don't want that to
+    // break the whole page, so it's fetched separately and degrades gracefully.
+    let allTasks: Awaited<ReturnType<typeof getOpenTasks>> = [];
     try {
-      overdueTasksResult = await getOverdueTasks(OWNER_ID, 200);
+      allTasks = await getOpenTasks(OWNER_ID, 250);
     } catch (e) {
-      console.warn("Skipping overdue tasks (likely missing scope):", e);
+      console.warn("Skipping tasks (likely missing scope):", e);
     }
-    const overdueTasks = overdueTasksResult;
+
+    const startOfTomorrow = new Date();
+    startOfTomorrow.setHours(24, 0, 0, 0);
+    const endOfTomorrow = new Date();
+    endOfTomorrow.setDate(endOfTomorrow.getDate() + 2);
+    endOfTomorrow.setHours(0, 0, 0, 0);
+
+    const overdueTaskList = allTasks.filter((t) => t.isOverdue);
+    const upcomingTaskList = allTasks.filter((t) => {
+      if (t.isOverdue || !t.dueDate) return false;
+      const due = new Date(t.dueDate).getTime();
+      return due >= Date.now() && due < endOfTomorrow.getTime();
+    });
 
     // ---- P1: Deals qu'on ferme (sheet % >= 40, matched to HubSpot by name) ----
     const closingCandidates = closingSheetRows.rows.filter(
@@ -422,10 +434,8 @@ export async function GET(request: Request) {
       p3_no_show: p3,
       p4_stale_planned_meetings: stalePlanned,
       p5_nettoyage: nettoyage,
-      overdue_tasks: {
-        total: overdueTasks.total,
-        items: overdueTasks.results.slice(0, 10),
-      },
+      overdue_tasks: overdueTaskList,
+      upcoming_tasks: upcomingTaskList,
       p6_outbound_general: p6,
     });
   } catch (err: any) {
