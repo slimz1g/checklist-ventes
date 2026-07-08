@@ -200,30 +200,38 @@ export async function GET() {
 
         // Fireflies insight — only fetched for P1 (a handful of deals, not the
         // whole pipeline), so it doesn't slow down or risk timing out the
-        // main page load. Matched by the contact's email since that's more
-        // reliable than matching by name.
+        // main page load. Matched by the contact's email(s) — someone can book
+        // a meeting from a secondary address that isn't their primary CRM email,
+        // so we try every known email for this contact, not just the first one.
         let fireflies: { insight: string; recordingLabel: string; link: string } | null = null;
         let firefliesDebug = "";
         if (!contact) {
           firefliesDebug = "Aucun contact associé trouvé sur ce deal HubSpot.";
-        } else if (!contact.email) {
-          firefliesDebug = "Le contact associé n'a pas d'adresse courriel dans HubSpot.";
+        } else if (contact.emails.length === 0) {
+          firefliesDebug = "Le contact associé n'a aucune adresse courriel dans HubSpot.";
         } else {
-          try {
-            const transcript = await findTranscriptByParticipant(contact.email);
-            if (transcript) {
-              const summary = transcript.summary?.short_summary ?? "";
-              const firstSentence = summary.split(/(?<=[.!?])\s/)[0] ?? summary;
-              fireflies = {
-                insight: `🎙️ ${firstSentence}`,
-                recordingLabel: `${transcript.title} · ${new Date(transcript.date).toLocaleDateString("fr-CA")} · ${Math.round(transcript.duration)} min`,
-                link: firefliesRecordingUrl(transcript.id),
-              };
-            } else {
-              firefliesDebug = `Aucune transcription Fireflies trouvée pour ${contact.email}.`;
+          const triedEmails: string[] = [];
+          for (const email of contact.emails) {
+            triedEmails.push(email);
+            try {
+              const transcript = await findTranscriptByParticipant(email);
+              if (transcript) {
+                const summary = transcript.summary?.short_summary ?? "";
+                const firstSentence = summary.split(/(?<=[.!?])\s/)[0] ?? summary;
+                fireflies = {
+                  insight: `🎙️ ${firstSentence}`,
+                  recordingLabel: `${transcript.title} · ${new Date(transcript.date).toLocaleDateString("fr-CA")} · ${Math.round(transcript.duration)} min`,
+                  link: firefliesRecordingUrl(transcript.id),
+                };
+                break;
+              }
+            } catch (e: any) {
+              firefliesDebug = `Erreur Fireflies (${email}) : ${e.message}`;
+              break;
             }
-          } catch (e: any) {
-            firefliesDebug = `Erreur Fireflies : ${e.message}`;
+          }
+          if (!fireflies && !firefliesDebug) {
+            firefliesDebug = `Aucune transcription trouvée pour : ${triedEmails.join(", ")}.`;
           }
         }
 
