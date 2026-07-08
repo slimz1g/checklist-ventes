@@ -104,7 +104,18 @@ export async function getOverdueTasks(ownerId: string, limit = 100) {
  * click-to-call (Aircall tel: link) buttons.
  */
 export async function getPrimaryContactPhone(dealId: string): Promise<string | null> {
-  const assocRes = await fetch(
+  const contact = await getPrimaryContact(dealId);
+  return contact?.phone ?? null;
+}
+
+/**
+ * Get the first associated contact's phone AND email for a deal. The email is
+ * what we use to match the deal to a Fireflies meeting transcript.
+ */
+export async function getPrimaryContact(
+  dealId: string
+): Promise<{ phone: string | null; email: string | null } | null> {
+  const assocRes = await fetchWithRetry(
     `${HUBSPOT_BASE}/crm/v3/objects/deals/${dealId}/associations/contacts`,
     { headers: authHeaders() }
   );
@@ -113,14 +124,15 @@ export async function getPrimaryContactPhone(dealId: string): Promise<string | n
   const contactId = assocData.results?.[0]?.id;
   if (!contactId) return null;
 
-  const contactRes = await fetch(
-    `${HUBSPOT_BASE}/crm/v3/objects/contacts/${contactId}?properties=phone,mobilephone`,
+  const contactRes = await fetchWithRetry(
+    `${HUBSPOT_BASE}/crm/v3/objects/contacts/${contactId}?properties=phone,mobilephone,email`,
     { headers: authHeaders() }
   );
   if (!contactRes.ok) return null;
   const contact = await contactRes.json();
-  const phone = contact.properties?.phone || contact.properties?.mobilephone;
-  return phone || null;
+  const phone = contact.properties?.phone || contact.properties?.mobilephone || null;
+  const email = contact.properties?.email || null;
+  return { phone, email };
 }
 
 export function hubspotDealUrl(portalId: string, dealId: string) {
