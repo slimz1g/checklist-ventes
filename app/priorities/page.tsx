@@ -40,9 +40,12 @@ export default function PrioritesPage() {
   const [data, setData] = useState<Priorities | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState<"mine" | "team">("mine");
+  const [pipelineFilter, setPipelineFilter] = useState<"tous" | "inbound" | "entonnoir" | "outbound">("tous");
 
   useEffect(() => {
-    fetch("/api/priorities")
+    setLoading(true);
+    fetch(`/api/priorities?scope=${scope}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) throw new Error(json.error);
@@ -50,7 +53,9 @@ export default function PrioritesPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [scope]);
+
+  const byPipeline = (item: any) => pipelineFilter === "tous" || item.pipeline === pipelineFilter;
 
   return (
     <div style={{ background: COLORS.bg, minHeight: "100vh", fontFamily: "Inter, sans-serif" }}>
@@ -82,6 +87,64 @@ export default function PrioritesPage() {
           Le plus urgent en haut, le nettoyage en bas
         </p>
 
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {[
+            { key: "mine" as const, label: "👤 Mes deals" },
+            { key: "team" as const, label: "👥 Toute l'équipe" },
+          ].map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setScope(r.key)}
+              style={{
+                background: scope === r.key ? COLORS.orange : COLORS.card,
+                color: scope === r.key ? "#fff" : COLORS.navySoft,
+                border: `1px solid ${scope === r.key ? COLORS.orange : COLORS.border}`,
+                borderRadius: 8,
+                padding: "8px 14px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
+          {[
+            { key: "tous" as const, label: "🌐 Tous" },
+            { key: "inbound" as const, label: "📥 Deals sans RV réalisé" },
+            { key: "entonnoir" as const, label: "🔻 Entonnoir de ventes" },
+            { key: "outbound" as const, label: "📤 Outbound: Cold Email" },
+          ].map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setPipelineFilter(p.key)}
+              style={{
+                background: pipelineFilter === p.key ? COLORS.navy : COLORS.card,
+                color: pipelineFilter === p.key ? "#fff" : COLORS.navySoft,
+                border: `1px solid ${pipelineFilter === p.key ? COLORS.navy : COLORS.border}`,
+                borderRadius: 999,
+                padding: "7px 14px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {scope === "team" && (
+          <div style={{ fontSize: 12, color: COLORS.navySoft, marginBottom: 16, fontStyle: "italic" }}>
+            Mode "Toute l'équipe" : montre les deals de tous les reps, sans indiquer qui est propriétaire de chacun pour l'instant.
+          </div>
+        )}
+
         {loading && <div style={{ color: COLORS.navySoft }}>Chargement des priorités…</div>}
 
         {error && (
@@ -90,11 +153,19 @@ export default function PrioritesPage() {
           </div>
         )}
 
-        {data && (
+        {data && (() => {
+          const p1 = data.p1_closing.filter(byPipeline);
+          const p1bItems = data.p1b_entonnoir_no_followup.items.filter(byPipeline);
+          const p2 = data.p2_inbound_fresh.filter(byPipeline);
+          const p3 = data.p3_no_show.filter(byPipeline);
+          const p4 = data.p4_stale_planned_meetings.filter(byPipeline);
+          const p5 = data.p5_nettoyage.filter(byPipeline);
+          const p6 = data.p6_outbound_general.filter(byPipeline);
+          return (
           <>
-            <Section title="🔥 Sur le point de signer" count={data.p1_closing.length} emptyText="Rien pour l'instant — aucun deal ≥40% dans le sheet.">
+            <Section title="🔥 Sur le point de signer" count={p1.length} emptyText="Rien pour l'instant — aucun deal ≥40% dans le sheet.">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                {data.p1_closing.map((d, i) => (
+                {p1.map((d, i) => (
                   <div key={i} style={{ background: COLORS.card, border: `1px solid ${COLORS.redSoft}`, borderLeft: `3px solid ${COLORS.red}`, borderRadius: 12, padding: 16 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <strong style={{ color: COLORS.navy }}>😊 {d.name}</strong>
@@ -157,42 +228,42 @@ export default function PrioritesPage() {
 
             <Section
               title="🕸️ Entonnoir de ventes — aucun suivi programmé"
-              count={data.p1b_entonnoir_no_followup.total}
+              count={p1bItems.length}
               subtitle="Tous stages confondus : pas de tâche future, pas de contact depuis 10 jours+"
             >
-              {data.p1b_entonnoir_no_followup.items.map((d, i) => (
+              {p1bItems.map((d, i) => (
                 <Row key={i} name={d.name} meta={`${d.days} jours sans contact`} url={d.hubspotUrl} tone={COLORS.indigo} />
               ))}
-              {data.p1b_entonnoir_no_followup.total > data.p1b_entonnoir_no_followup.items.length && (
+              {data.p1b_entonnoir_no_followup.total > data.p1b_entonnoir_no_followup.items.length && pipelineFilter === "tous" && (
                 <div style={{ fontSize: 12, fontStyle: "italic", color: COLORS.navySoft, padding: "4px 2px" }}>
                   + {data.p1b_entonnoir_no_followup.total - data.p1b_entonnoir_no_followup.items.length} autres
                 </div>
               )}
             </Section>
 
-            <Section title="📥 Leads inbound sans contact 48h+" count={data.p2_inbound_fresh.length}>
-              {data.p2_inbound_fresh.map((d, i) => (
+            <Section title="📥 Leads inbound sans contact 48h+" count={p2.length}>
+              {p2.map((d, i) => (
                 <Row key={i} name={d.name} meta={`${d.days ?? "?"} jours`} url={d.hubspotUrl} tone={COLORS.orange} />
               ))}
             </Section>
 
-            <Section title="📵 No Show sans contact 48h+" count={data.p3_no_show.length} emptyText="✅ Rien à signaler.">
-              {data.p3_no_show.map((d, i) => (
+            <Section title="📵 No Show sans contact 48h+" count={p3.length} emptyText="✅ Rien à signaler.">
+              {p3.map((d, i) => (
                 <Row key={i} name={d.name} meta="" url={d.hubspotUrl} tone={COLORS.orange} />
               ))}
             </Section>
 
-            <Section title="🗓️ RV planifié à mettre à jour" count={data.p4_stale_planned_meetings.length} emptyText="✅ Rien à signaler.">
-              {data.p4_stale_planned_meetings.map((d, i) => (
+            <Section title="🗓️ RV planifié à mettre à jour" count={p4.length} emptyText="✅ Rien à signaler.">
+              {p4.map((d, i) => (
                 <Row key={i} name={d.name} meta={`Rencontre prévue le ${d.meetingDate}`} url={d.hubspotUrl} tone={COLORS.red} />
               ))}
             </Section>
 
-            <Section title="🧹 Nettoyage" count={data.p5_nettoyage.length}>
-              {data.p5_nettoyage.map((d, i) => (
+            <Section title="🧹 Nettoyage" count={p5.length}>
+              {p5.map((d, i) => (
                 <Row key={i} name={d.name} meta={d.overdueRecall ? "Rappel dépassé (60j)" : `${d.days} jours`} url={d.hubspotUrl} tone={COLORS.amber} />
               ))}
-              {data.overdue_tasks.total > 0 && (
+              {data.overdue_tasks.total > 0 && pipelineFilter === "tous" && (
                 <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderLeft: `3px solid ${COLORS.amber}`, borderRadius: 10, padding: 14, marginTop: 4 }}>
                   <strong style={{ color: COLORS.navy }}>⏰ {data.overdue_tasks.total} tâches HubSpot en retard</strong>
                   {data.overdue_tasks.items.slice(0, 3).map((t, i) => (
@@ -204,13 +275,14 @@ export default function PrioritesPage() {
               )}
             </Section>
 
-            <Section title="📤 Outbound — cadence normale" count={data.p6_outbound_general.length}>
-              {data.p6_outbound_general.map((d, i) => (
+            <Section title="📤 Outbound — cadence normale" count={p6.length}>
+              {p6.map((d, i) => (
                 <Row key={i} name={d.name} meta={`${d.days ?? "?"} jours`} url={d.hubspotUrl} tone={COLORS.navySoft} />
               ))}
             </Section>
           </>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
