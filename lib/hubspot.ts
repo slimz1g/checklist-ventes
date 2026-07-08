@@ -298,3 +298,24 @@ export const STAGES = {
   OUTBOUND_NO_SHOW: "1294421337",
   OUTBOUND_BOUGE_PAS: "1294334843",
 };
+
+/** Human-readable label for every stage ID, used to sub-group deal lists by stage. */
+export const STAGE_LABELS: Record<string, string> = {
+  [STAGES.NEGO_EN_COURS]: "Négo en cours 🤝",
+  [STAGES.REMIS_A_PLUS_TARD_ENTONNOIR]: "⏰ Remis à plus tard",
+  [STAGES.RV_REALISE]: "Rendez-vous réalisé",
+  [STAGES.NE_BOUGE_PAS_ENTONNOIR]: "Ne Bouge pas",
+  [STAGES.GHOSTING]: "Ghosting ? ou Pas dispo?",
+  [STAGES.INBOUND_SQL]: "SQL (à contacter)",
+  [STAGES.INBOUND_1ER_SUIVI]: "1er suivi 📞",
+  [STAGES.INBOUND_2E_SUIVI]: "2e suivi 📞",
+  [STAGES.INBOUND_3E_SUIVI]: "3e suivi et + 📞",
+  [STAGES.INBOUND_BOUGE_PAS]: "Bouge pas",
+  [STAGES.INBOUND_REMIS_A_PLUS_TARD]: "⏰ Remis à plus tard",
+  [STAGES.INBOUND_RV_PLANIFIE]: "RV planifié 👍🏻",
+  [STAGES.OUTBOUND_EMAIL]: "Email (préférence écrite)",
+  [STAGES.OUTBOUND_EN_SUIVI]: "En Suivi",
+  [STAGES.OUTBOUND_RDV_PLANIFIE]: "RDV Planifié",
+  [STAGES.OUTBOUND_NO_SHOW]: "No Show",
+  [STAGES.OUTBOUND_BOUGE_PAS]: "Bouge Pas",
+};
