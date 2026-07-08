@@ -15,6 +15,24 @@ function authHeaders() {
   };
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * fetch() with one automatic retry on HubSpot's 429 rate-limit response.
+ * We keep requests running in parallel (fast — avoids the serverless function
+ * timeout) but back off briefly and retry once if HubSpot says "too fast".
+ */
+async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+  const res = await fetch(url, options);
+  if (res.status === 429) {
+    await sleep(1200);
+    return fetch(url, options);
+  }
+  return res;
+}
+
 export type DealFilter = {
   propertyName: string;
   operator: "EQ" | "NEQ" | "LT" | "LTE" | "GT" | "GTE" | "IN" | "NOT_IN" | "HAS_PROPERTY" | "NOT_HAS_PROPERTY";
@@ -36,7 +54,7 @@ export async function searchDeals(
   properties: string[],
   limit = 100
 ): Promise<{ results: Deal[]; total: number }> {
-  const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/deals/search`, {
+  const res = await fetchWithRetry(`${HUBSPOT_BASE}/crm/v3/objects/deals/search`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ filterGroups, properties, limit }),
@@ -55,7 +73,7 @@ export async function searchDeals(
  * Fetch overdue tasks (hs_task_is_overdue = true) for a given owner.
  */
 export async function getOverdueTasks(ownerId: string, limit = 100) {
-  const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/tasks/search`, {
+  const res = await fetchWithRetry(`${HUBSPOT_BASE}/crm/v3/objects/tasks/search`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
