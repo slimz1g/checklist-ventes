@@ -421,6 +421,26 @@ function TaskRow({
   );
 }
 
+function groupByStage<T extends { stageLabel?: string }>(items: T[]): { stageLabel: string; items: T[] }[] {
+  const groups: Record<string, T[]> = {};
+  for (const item of items) {
+    const key = item.stageLabel || "Autre";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(item);
+  }
+  return Object.entries(groups)
+    .map(([stageLabel, items]) => ({ stageLabel, items }))
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
+function StageGroupHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navySoft, marginTop: 14, marginBottom: 2 }}>
+      {label} ({count})
+    </div>
+  );
+}
+
 function Section({ title, subtitle, count, emptyText, children }: any) {
   return (
     <div style={{ marginBottom: 28 }}>
