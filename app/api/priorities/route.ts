@@ -3,6 +3,11 @@
 // documented in "Check-list_des_ventes_Reference.md". This is the real logic —
 // no hardcoded example data.
 
+// Vercel's default function timeout (10s on Hobby) is too short once Fireflies
+// lookups are added on top of the HubSpot + Sheet calls. This raises it to the
+// maximum Hobby allows without needing a paid plan.
+export const maxDuration = 60;
+
 import { NextResponse } from "next/server";
 import {
   searchDeals,
