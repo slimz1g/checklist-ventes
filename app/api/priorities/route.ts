@@ -31,154 +31,156 @@ function daysSince(dateStr: string | undefined): number | null {
   return h === null ? null : Math.floor(h / 24);
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function GET() {
   try {
-    // Calls run sequentially with a small delay between each — HubSpot's
-    // per-second burst limit rejects too many simultaneous requests (this is
-    // what caused the 429 RATE_LIMIT error during first testing).
-    const closingSheetRows = await getClosingRows();
-    await sleep(150);
+    // Calls run in parallel for speed (a serverless function has a hard time
+    // limit — running everything sequentially risked timing out). Rate-limit
+    // resilience now lives in lib/hubspot.ts (automatic retry on 429) instead
+    // of manual delays here.
+    let overdueTasksResult: { results: any[]; total: number } = { results: [], total: 0 };
 
-    const entonnoirDeals = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "pipeline", operator: "EQ", value: PIPELINES.ENTONNOIR },
-            { propertyName: "hs_is_closed", operator: "EQ", value: "false" },
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-          ],
-        },
-      ],
-      ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "amount", "closedate"],
-      100
-    );
-    await sleep(150);
+    const [
+      closingSheetRows,
+      entonnoirDeals,
+      inboundFreshDeals,
+      outboundNoShowDeals,
+      rvPlanifieInbound,
+      rdvPlanifieOutbound,
+      remisEtBougePas,
+      outboundGeneral,
+    ] = await Promise.all([
+      getClosingRows(),
 
-    const inboundFreshDeals = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "pipeline", operator: "EQ", value: PIPELINES.INBOUND },
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-            {
-              propertyName: "dealstage",
-              operator: "IN",
-              values: [
-                STAGES.INBOUND_SQL,
-                STAGES.INBOUND_1ER_SUIVI,
-                STAGES.INBOUND_2E_SUIVI,
-                STAGES.INBOUND_3E_SUIVI,
-              ],
-            },
-          ],
-        },
-      ],
-      ["dealname", "dealstage", "notes_last_contacted"],
-      100
-    );
-    await sleep(150);
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: PIPELINES.ENTONNOIR },
+              { propertyName: "hs_is_closed", operator: "EQ", value: "false" },
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+            ],
+          },
+        ],
+        ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "amount", "closedate"],
+        100
+      ),
 
-    const outboundNoShowDeals = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "pipeline", operator: "EQ", value: PIPELINES.OUTBOUND_COLD_EMAIL },
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-            { propertyName: "dealstage", operator: "EQ", value: STAGES.OUTBOUND_NO_SHOW },
-          ],
-        },
-      ],
-      ["dealname", "notes_last_contacted"],
-      50
-    );
-    await sleep(150);
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: PIPELINES.INBOUND },
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+              {
+                propertyName: "dealstage",
+                operator: "IN",
+                values: [
+                  STAGES.INBOUND_SQL,
+                  STAGES.INBOUND_1ER_SUIVI,
+                  STAGES.INBOUND_2E_SUIVI,
+                  STAGES.INBOUND_3E_SUIVI,
+                ],
+              },
+            ],
+          },
+        ],
+        ["dealname", "dealstage", "notes_last_contacted"],
+        100
+      ),
 
-    const rvPlanifieInbound = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "pipeline", operator: "EQ", value: PIPELINES.INBOUND },
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-            { propertyName: "dealstage", operator: "EQ", value: STAGES.INBOUND_RV_PLANIFIE },
-          ],
-        },
-      ],
-      ["dealname", "closedate"],
-      50
-    );
-    await sleep(150);
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: PIPELINES.OUTBOUND_COLD_EMAIL },
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+              { propertyName: "dealstage", operator: "EQ", value: STAGES.OUTBOUND_NO_SHOW },
+            ],
+          },
+        ],
+        ["dealname", "notes_last_contacted"],
+        50
+      ),
 
-    const rdvPlanifieOutbound = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "pipeline", operator: "EQ", value: PIPELINES.OUTBOUND_COLD_EMAIL },
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-            { propertyName: "dealstage", operator: "EQ", value: STAGES.OUTBOUND_RDV_PLANIFIE },
-          ],
-        },
-      ],
-      ["dealname", "closedate"],
-      50
-    );
-    await sleep(150);
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: PIPELINES.INBOUND },
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+              { propertyName: "dealstage", operator: "EQ", value: STAGES.INBOUND_RV_PLANIFIE },
+            ],
+          },
+        ],
+        ["dealname", "closedate"],
+        50
+      ),
 
-    const remisEtBougePas = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-            {
-              propertyName: "dealstage",
-              operator: "IN",
-              values: [
-                STAGES.REMIS_A_PLUS_TARD_ENTONNOIR,
-                STAGES.NE_BOUGE_PAS_ENTONNOIR,
-                STAGES.INBOUND_BOUGE_PAS,
-                STAGES.INBOUND_REMIS_A_PLUS_TARD,
-                STAGES.OUTBOUND_BOUGE_PAS,
-              ],
-            },
-          ],
-        },
-      ],
-      ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "hs_v2_date_entered_current_stage"],
-      200
-    );
-    await sleep(150);
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: PIPELINES.OUTBOUND_COLD_EMAIL },
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+              { propertyName: "dealstage", operator: "EQ", value: STAGES.OUTBOUND_RDV_PLANIFIE },
+            ],
+          },
+        ],
+        ["dealname", "closedate"],
+        50
+      ),
+
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+              {
+                propertyName: "dealstage",
+                operator: "IN",
+                values: [
+                  STAGES.REMIS_A_PLUS_TARD_ENTONNOIR,
+                  STAGES.NE_BOUGE_PAS_ENTONNOIR,
+                  STAGES.INBOUND_BOUGE_PAS,
+                  STAGES.INBOUND_REMIS_A_PLUS_TARD,
+                  STAGES.OUTBOUND_BOUGE_PAS,
+                ],
+              },
+            ],
+          },
+        ],
+        ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "hs_v2_date_entered_current_stage"],
+        200
+      ),
+
+      searchDeals(
+        [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: PIPELINES.OUTBOUND_COLD_EMAIL },
+              { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
+              {
+                propertyName: "dealstage",
+                operator: "IN",
+                values: [STAGES.OUTBOUND_EN_SUIVI, STAGES.OUTBOUND_EMAIL],
+              },
+            ],
+          },
+        ],
+        ["dealname", "dealstage", "notes_last_contacted"],
+        100
+      ),
+    ]);
 
     // Overdue tasks require the crm.objects.tasks.read scope. If the key doesn't
     // have it, this fails — we don't want that to break the whole page, so it's
-    // wrapped separately and degrades gracefully to an empty list.
-    let overdueTasks: { results: any[]; total: number } = { results: [], total: 0 };
+    // fetched separately and degrades gracefully to an empty list.
     try {
-      overdueTasks = await getOverdueTasks(OWNER_ID, 200);
+      overdueTasksResult = await getOverdueTasks(OWNER_ID, 200);
     } catch (e) {
       console.warn("Skipping overdue tasks (likely missing scope):", e);
     }
-    await sleep(150);
-
-    const outboundGeneral = await searchDeals(
-      [
-        {
-          filters: [
-            { propertyName: "pipeline", operator: "EQ", value: PIPELINES.OUTBOUND_COLD_EMAIL },
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: OWNER_ID },
-            {
-              propertyName: "dealstage",
-              operator: "IN",
-              values: [STAGES.OUTBOUND_EN_SUIVI, STAGES.OUTBOUND_EMAIL],
-            },
-          ],
-        },
-      ],
-      ["dealname", "dealstage", "notes_last_contacted"],
-      100
-    );
+    const overdueTasks = overdueTasksResult;
 
     // ---- P1: Deals qu'on ferme (sheet % >= 40, matched to HubSpot by name) ----
     const closingCandidates = closingSheetRows.filter(
