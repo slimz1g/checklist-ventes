@@ -14,6 +14,7 @@ import {
   getOverdueTasks,
   getPrimaryContact,
   hubspotDealUrl,
+  getOwnersMap,
   PIPELINES,
   STAGES,
 } from "@/lib/hubspot";
@@ -91,6 +92,7 @@ export async function GET(request: Request) {
       rdvPlanifieOutbound,
       remisEtBougePas,
       outboundGeneral,
+      ownersMap,
     ] = await Promise.all([
       getClosingRows(),
 
@@ -104,7 +106,7 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "amount", "closedate"],
+        ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "amount", "closedate", "hubspot_owner_id"],
         100
       ),
 
@@ -127,7 +129,7 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "dealstage", "notes_last_contacted"],
+        ["dealname", "dealstage", "notes_last_contacted", "hubspot_owner_id"],
         100
       ),
 
@@ -141,7 +143,7 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "notes_last_contacted"],
+        ["dealname", "notes_last_contacted", "hubspot_owner_id"],
         50
       ),
 
@@ -155,7 +157,7 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "closedate"],
+        ["dealname", "closedate", "hubspot_owner_id"],
         50
       ),
 
@@ -169,7 +171,7 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "closedate"],
+        ["dealname", "closedate", "hubspot_owner_id"],
         50
       ),
 
@@ -192,7 +194,7 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "hs_v2_date_entered_current_stage"],
+        ["dealname", "dealstage", "notes_last_contacted", "notes_next_activity_date", "hs_v2_date_entered_current_stage", "hubspot_owner_id"],
         200
       ),
 
@@ -210,9 +212,11 @@ export async function GET(request: Request) {
             ],
           },
         ],
-        ["dealname", "dealstage", "notes_last_contacted"],
+        ["dealname", "dealstage", "notes_last_contacted", "hubspot_owner_id"],
         100
       ),
+
+      scope === "team" ? getOwnersMap() : Promise.resolve({} as Record<string, string>),
     ]);
 
     // Overdue tasks require the crm.objects.tasks.read scope. If the key doesn't
@@ -285,6 +289,7 @@ export async function GET(request: Request) {
           dateSuivi: row.dateSuivi,
           phone: contact?.phone ?? null,
           hubspotUrl: match ? hubspotDealUrl(HUBSPOT_PORTAL_ID, match.id) : null,
+          ownerName: match ? ownersMap[match.properties.hubspot_owner_id] || null : null,
           fireflies,
           firefliesDebug,
         };
@@ -306,6 +311,7 @@ export async function GET(request: Request) {
         pipeline: "entonnoir" as const,
         days: daysSince(d.properties.notes_last_contacted),
         hubspotUrl: hubspotDealUrl(HUBSPOT_PORTAL_ID, d.id),
+        ownerName: ownersMap[d.properties.hubspot_owner_id] || null,
       }))
       .sort((a, b) => (b.days ?? 0) - (a.days ?? 0));
 
@@ -322,6 +328,7 @@ export async function GET(request: Request) {
         pipeline: "inbound" as const,
         days: daysSince(d.properties.notes_last_contacted),
         hubspotUrl: hubspotDealUrl(HUBSPOT_PORTAL_ID, d.id),
+        ownerName: ownersMap[d.properties.hubspot_owner_id] || null,
       }));
 
     // ---- P3: No Show, 48h+ no contact ----
@@ -335,6 +342,7 @@ export async function GET(request: Request) {
         name: d.properties.dealname,
         pipeline: "outbound" as const,
         hubspotUrl: hubspotDealUrl(HUBSPOT_PORTAL_ID, d.id),
+        ownerName: ownersMap[d.properties.hubspot_owner_id] || null,
       }));
 
     // ---- P4: RV/RDV planifié, meeting date passed, stage unchanged ----
@@ -349,6 +357,7 @@ export async function GET(request: Request) {
         pipeline: d.__pipeline,
         meetingDate: d.properties.closedate,
         hubspotUrl: hubspotDealUrl(HUBSPOT_PORTAL_ID, d.id),
+        ownerName: ownersMap[d.properties.hubspot_owner_id] || null,
       }));
 
     // ---- P5: Remis à plus tard / Bouge pas / tâches en retard ----
@@ -374,6 +383,7 @@ export async function GET(request: Request) {
         days,
         overdueRecall,
         hubspotUrl: hubspotDealUrl(HUBSPOT_PORTAL_ID, d.id),
+        ownerName: ownersMap[d.properties.hubspot_owner_id] || null,
       };
     });
 
@@ -391,6 +401,7 @@ export async function GET(request: Request) {
         pipeline: "outbound" as const,
         days: daysSince(d.properties.notes_last_contacted),
         hubspotUrl: hubspotDealUrl(HUBSPOT_PORTAL_ID, d.id),
+        ownerName: ownersMap[d.properties.hubspot_owner_id] || null,
       }));
 
     return NextResponse.json({
