@@ -226,7 +226,7 @@ export async function GET(request: Request) {
     const overdueTasks = overdueTasksResult;
 
     // ---- P1: Deals qu'on ferme (sheet % >= 40, matched to HubSpot by name) ----
-    const closingCandidates = closingSheetRows.filter(
+    const closingCandidates = closingSheetRows.rows.filter(
       (r) => r.repSection === "Slim" && r.closingPercent >= 40
     );
     const p1 = await Promise.all(
@@ -393,6 +393,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
+      sheetTabUsed: closingSheetRows.tabUsed,
       p1_closing: p1,
       p1b_entonnoir_no_followup: {
         total: p1b.length,
