@@ -152,6 +152,26 @@ export function hubspotDealUrl(portalId: string, dealId: string) {
   return `https://app.hubspot.com/contacts/${portalId}/record/0-3/${dealId}`;
 }
 
+/**
+ * Fetch all owners once and build an id → display name map. Used to show
+ * "who owns this deal" in the "Toute l'équipe" view without an extra API
+ * call per deal (we just add hubspot_owner_id to the properties we already
+ * request, then resolve names client-side from this map).
+ */
+export async function getOwnersMap(): Promise<Record<string, string>> {
+  const res = await fetchWithRetry(`${HUBSPOT_BASE}/crm/v3/owners?limit=200`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) return {};
+  const data = await res.json();
+  const map: Record<string, string> = {};
+  for (const owner of data.results ?? []) {
+    const name = [owner.firstName, owner.lastName].filter(Boolean).join(" ") || owner.email;
+    map[String(owner.id)] = name;
+  }
+  return map;
+}
+
 // Pipeline + stage IDs discovered during the design phase (see reference doc).
 export const PIPELINES = {
   ENTONNOIR: "2041621",
