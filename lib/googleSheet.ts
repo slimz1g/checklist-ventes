@@ -30,14 +30,44 @@ function getAuth() {
   });
 }
 
+const MONTH_MAP: Record<string, number> = {
+  jan: 1, janv: 1, janvier: 1,
+  fev: 2, fév: 2, fevrier: 2, février: 2,
+  mar: 3, mars: 3,
+  avr: 4, avril: 4,
+  mai: 5,
+  juin: 6,
+  juil: 7, juillet: 7, july: 7,
+  aou: 8, aout: 8, août: 8, august: 8,
+  sep: 9, sept: 9, septembre: 9,
+  oct: 10, octobre: 10,
+  nov: 11, novembre: 11,
+  dec: 12, déc: 12, decembre: 12, décembre: 12,
+};
+
+/**
+ * Parses a tab title like "Pipeline vendeur - juil '26" or "Pipeline vendeur - july '25"
+ * into { month, year }, or null if it doesn't match the expected pattern.
+ */
+function parseTabDate(title: string): { month: number; year: number } | null {
+  const match = title.match(/-\s*([a-zA-Zéûî]+)\.?\s*'?(\d{2,4})\s*$/);
+  if (!match) return null;
+  const monthKey = match[1].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const month = MONTH_MAP[monthKey] ?? MONTH_MAP[match[1].toLowerCase()];
+  if (!month) return null;
+  let year = parseInt(match[2], 10);
+  if (year < 100) year += 2000;
+  return { month, year };
+}
+
 /**
  * Finds the current "Pipeline vendeur - <mois>" tab automatically instead of
- * hardcoding a name that changes every month. Historical tab names have been
- * inconsistent (some in French like "juil '26", one even in English "july
- * '25"), so name-parsing the month would be fragile. Instead we rely on
- * `sheetId`, which Google assigns once at tab creation and never reuses or
- * reorders — the highest sheetId among "Pipeline vendeur - *" tabs is always
- * the most recently created one, i.e. the current month.
+ * hardcoding a name that changes every month. Primary strategy: parse the
+ * month/year out of each candidate title and match it against today's date
+ * (handles the observed naming inconsistency, e.g. one historical tab named
+ * in English "july '25" instead of French). If no title parses cleanly,
+ * fall back to the highest `sheetId` (assigned once at tab creation, so the
+ * newest tab has the highest id) as a best-effort guess.
  */
 async function findCurrentMonthTab(sheets: ReturnType<typeof google.sheets>): Promise<string> {
   const meta = await sheets.spreadsheets.get({
@@ -53,6 +83,25 @@ async function findCurrentMonthTab(sheets: ReturnType<typeof google.sheets>): Pr
     throw new Error(`No sheet tab starting with "${TAB_PREFIX}" was found.`);
   }
 
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const exactMatch = candidates.find((c) => {
+    const parsed = parseTabDate(c.title);
+    return parsed && parsed.month === currentMonth && parsed.year === currentYear;
+  });
+  if (exactMatch) return exactMatch.title;
+
+  // No exact match for the current month (e.g. the new tab hasn't been created
+  // yet this month) — fall back to the most recent one we can parse.
+  const parseable = candidates
+    .map((c) => ({ c, parsed: parseTabDate(c.title) }))
+    .filter((x): x is { c: { title: string; sheetId: number }; parsed: { month: number; year: number } } => !!x.parsed)
+    .sort((a, b) => b.parsed.year * 12 + b.parsed.month - (a.parsed.year * 12 + a.parsed.month));
+  if (parseable.length > 0) return parseable[0].c.title;
+
+  // Last resort: highest sheetId (most recently created tab).
   const newest = candidates.reduce((a, b) => (b.sheetId > a.sheetId ? b : a));
   return newest.title;
 }
@@ -63,7 +112,7 @@ async function findCurrentMonthTab(sheets: ReturnType<typeof google.sheets>): Pr
  * manually: a bare name in column A with no other columns filled = a new
  * rep section starts.
  */
-export async function getClosingRows(): Promise<ClosingRow[]> {
+export async function getClosingRows(): Promise<{ rows: ClosingRow[]; tabUsed: string }> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
@@ -110,5 +159,5 @@ export async function getClosingRows(): Promise<ClosingRow[]> {
     });
   }
 
-  return parsed;
+  return { rows: parsed, tabUsed: tabName };
 }
