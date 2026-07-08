@@ -39,8 +39,8 @@ export async function findTranscriptByParticipant(
   email: string
 ): Promise<FirefliesTranscript | null> {
   const query = `
-    query Transcripts($participantEmail: String) {
-      transcripts(participant_email: $participantEmail, limit: 1) {
+    query Transcripts($participants: [String]) {
+      transcripts(participants: $participants, limit: 1) {
         id
         title
         date
@@ -56,7 +56,7 @@ export async function findTranscriptByParticipant(
   const res = await fetch(FIREFLIES_ENDPOINT, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ query, variables: { participantEmail: email } }),
+    body: JSON.stringify({ query, variables: { participants: [email] } }),
   });
 
   if (!res.ok) {
