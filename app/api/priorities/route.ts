@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import {
   searchDeals,
   getOverdueTasks,
-  getPrimaryContactPhone,
+  getPrimaryContact,
   hubspotDealUrl,
   PIPELINES,
   STAGES,
@@ -191,13 +191,30 @@ export async function GET() {
         const match = entonnoirDeals.results.find((d) =>
           d.properties.dealname?.toLowerCase().includes(row.dealName.toLowerCase())
         );
-        const phone = match ? await getPrimaryContactPhone(match.id) : null;
+        const contact = match ? await getPrimaryContact(match.id) : null;
 
-        // Try to enrich with a Fireflies insight — requires the contact's email,
-        // which we'd need to fetch via the deal's associated contact. Left as a
-        // follow-up call here rather than fetched by default, to avoid a Fireflies
-        // API call for every deal on every page load (see lib/fireflies.ts note
-        // about the scaling concern with search-by-participant).
+        // Fireflies insight — only fetched for P1 (a handful of deals, not the
+        // whole pipeline), so it doesn't slow down or risk timing out the
+        // main page load. Matched by the contact's email since that's more
+        // reliable than matching by name.
+        let fireflies: { insight: string; recordingLabel: string; link: string } | null = null;
+        if (contact?.email) {
+          try {
+            const transcript = await findTranscriptByParticipant(contact.email);
+            if (transcript) {
+              const summary = transcript.summary?.short_summary ?? "";
+              const firstSentence = summary.split(/(?<=[.!?])\s/)[0] ?? summary;
+              fireflies = {
+                insight: `🎙️ ${firstSentence}`,
+                recordingLabel: `${transcript.title} · ${new Date(transcript.date).toLocaleDateString("fr-CA")} · ${Math.round(transcript.duration)} min`,
+                link: firefliesRecordingUrl(transcript.id),
+              };
+            }
+          } catch (e) {
+            console.warn(`Fireflies lookup failed for ${row.dealName}:`, e);
+          }
+        }
+
         return {
           dealId: match?.id ?? null,
           name: row.dealName,
@@ -205,8 +222,9 @@ export async function GET() {
           percent: row.closingPercent,
           note: row.note,
           dateSuivi: row.dateSuivi,
-          phone,
+          phone: contact?.phone ?? null,
           hubspotUrl: match ? hubspotDealUrl(HUBSPOT_PORTAL_ID, match.id) : null,
+          fireflies,
         };
       })
     );
