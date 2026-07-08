@@ -120,11 +120,36 @@ export default function PrioritesPage() {
                         🔧 {d.firefliesDebug}
                       </div>
                     )}
-                    {d.hubspotUrl && (
-                      <a href={d.hubspotUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: COLORS.navySoft, display: "block", marginTop: 8 }}>
-                        Ouvrir dans HubSpot
-                      </a>
-                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                      {d.hubspotUrl && (
+                        <a href={d.hubspotUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: COLORS.navySoft }}>
+                          Ouvrir dans HubSpot
+                        </a>
+                      )}
+                      {d.phone ? (
+                        <a
+                          href={`tel:${d.phone}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            background: COLORS.orange,
+                            color: "#fff",
+                            borderRadius: 8,
+                            padding: "7px 12px",
+                            fontSize: 12.5,
+                            fontWeight: 600,
+                            textDecoration: "none",
+                          }}
+                        >
+                          📞 {d.phone} · Aircall
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: 11, color: COLORS.navySoft, fontStyle: "italic" }}>
+                          Aucun numéro trouvé
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
