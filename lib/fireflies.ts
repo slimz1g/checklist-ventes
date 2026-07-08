@@ -39,7 +39,7 @@ export async function findTranscriptByParticipant(
   email: string
 ): Promise<FirefliesTranscript | null> {
   const query = `
-    query Transcripts($participants: [String]) {
+    query Transcripts($participants: [String!]) {
       transcripts(participants: $participants, limit: 1) {
         id
         title
