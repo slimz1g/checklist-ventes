@@ -231,7 +231,7 @@ export async function GET(request: Request) {
     let allTasks: Awaited<ReturnType<typeof getOpenTasks>> = [];
     let tasksDebugError: string | null = null;
     try {
-      allTasks = await getOpenTasks(OWNER_ID, 250);
+      allTasks = await getOpenTasks(OWNER_ID, 200);
     } catch (e: any) {
       tasksDebugError = e.message;
       console.warn("Skipping tasks (likely missing scope):", e);
