@@ -22,7 +22,22 @@ const COLORS = {
   indigo: "#4338CA",
 };
 
-const FONT = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`;
+const FONT = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  .cv-row, .cv-card {
+    box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .cv-row:hover, .cv-card:hover {
+    box-shadow: 0 4px 12px rgba(16,24,40,0.08);
+    border-color: #D0D5DD;
+  }
+  .cv-pill { transition: opacity 0.15s ease, transform 0.1s ease; }
+  .cv-pill:hover { opacity: 0.88; }
+  .cv-pill:active { transform: scale(0.97); }
+  .cv-link { transition: opacity 0.15s ease; }
+  .cv-link:hover { opacity: 0.7; }
+`;
 
 type Priorities = {
   generatedAt: string;
@@ -99,6 +114,7 @@ export default function PrioritesPage() {
         style={{
           background: COLORS.card,
           borderBottom: `1px solid ${COLORS.border}`,
+          boxShadow: "0 1px 3px rgba(16,24,40,0.04)",
           padding: "0 24px",
           display: "flex",
           alignItems: "center",
@@ -130,17 +146,19 @@ export default function PrioritesPage() {
           ].map((r) => (
             <button
               key={r.key}
+              className="cv-pill"
               onClick={() => setScope(r.key)}
               style={{
                 background: scope === r.key ? COLORS.orange : COLORS.card,
                 color: scope === r.key ? "#fff" : COLORS.navySoft,
                 border: `1px solid ${scope === r.key ? COLORS.orange : COLORS.border}`,
                 borderRadius: 8,
-                padding: "8px 14px",
+                padding: "8px 16px",
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
                 fontFamily: "Inter, sans-serif",
+                boxShadow: scope === r.key ? "0 1px 3px rgba(242,107,33,0.3)" : "none",
               }}
             >
               {r.label}
@@ -157,6 +175,7 @@ export default function PrioritesPage() {
           ].map((p) => (
             <button
               key={p.key}
+              className="cv-pill"
               onClick={() => setPipelineFilter(p.key)}
               style={{
                 background: pipelineFilter === p.key ? COLORS.navy : COLORS.card,
@@ -208,7 +227,7 @@ export default function PrioritesPage() {
             <Section title="🔥 Sur le point de signer" count={p1.length} emptyText="Rien pour l'instant — aucun deal ≥40% dans le sheet.">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
                 {p1.map((d, i) => (
-                  <div key={i} style={{ background: COLORS.card, border: `1px solid ${COLORS.redSoft}`, borderLeft: `3px solid ${COLORS.red}`, borderRadius: 12, padding: 16 }}>
+                  <div key={i} className="cv-card" style={{ background: COLORS.card, border: `1px solid ${COLORS.redSoft}`, borderLeft: `3px solid ${COLORS.red}`, borderRadius: 12, padding: 18 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <div>
                         <strong style={{ color: COLORS.navy }}>😊 {d.name}</strong>
@@ -380,16 +399,17 @@ function TaskRow({
     : "";
   return (
     <div
+      className="cv-card"
       style={{
         background: COLORS.card,
         border: `1px solid ${COLORS.border}`,
         borderLeft: `3px solid ${tone}`,
-        borderRadius: 8,
-        padding: "10px 12px",
+        borderRadius: 9,
+        padding: "11px 14px",
         display: "flex",
         alignItems: "center",
         gap: 10,
-        fontSize: 13,
+        fontSize: 13.5,
         marginTop: 6,
       }}
     >
@@ -432,7 +452,21 @@ function groupByStage<T extends { stageLabel?: string }>(items: T[]): { stageLab
 
 function StageGroupHeader({ label, count }: { label: string; count: number }) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navySoft, marginTop: 14, marginBottom: 2 }}>
+    <div
+      style={{
+        fontSize: 11.5,
+        fontWeight: 700,
+        color: COLORS.navySoft,
+        marginTop: 16,
+        marginBottom: 4,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span style={{ width: 14, height: 1.5, background: COLORS.border, display: "inline-block" }} />
       {label} ({count})
     </div>
   );
@@ -440,13 +474,22 @@ function StageGroupHeader({ label, count }: { label: string; count: number }) {
 
 function Section({ title, subtitle, count, emptyText, children }: any) {
   return (
-    <div style={{ marginBottom: 28 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-        <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.navy }}>{title}</span>
-        <span style={{ fontSize: 12, color: COLORS.navySoft }}>({count})</span>
+    <div style={{ marginBottom: 36 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 8,
+          marginBottom: 4,
+          paddingBottom: 10,
+          borderBottom: `1px solid ${COLORS.border}`,
+        }}
+      >
+        <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.navy, letterSpacing: -0.1 }}>{title}</span>
+        <span style={{ fontSize: 12.5, color: COLORS.navySoft, fontWeight: 500 }}>({count})</span>
       </div>
-      {subtitle && <div style={{ fontSize: 12, color: COLORS.navySoft, marginBottom: 10 }}>{subtitle}</div>}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+      {subtitle && <div style={{ fontSize: 12, color: COLORS.navySoft, marginTop: 8, marginBottom: 6 }}>{subtitle}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
         {count === 0 && emptyText ? (
           <div style={{ fontSize: 13, fontStyle: "italic", color: COLORS.navySoft }}>{emptyText}</div>
         ) : (
@@ -472,20 +515,22 @@ function Row({
 }) {
   return (
     <div
+      className="cv-row"
       style={{
         background: COLORS.card,
         border: `1px solid ${COLORS.border}`,
         borderLeft: `3px solid ${tone}`,
-        borderRadius: 8,
-        padding: "10px 12px",
+        borderRadius: 9,
+        padding: "12px 14px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        fontSize: 13,
+        fontSize: 13.5,
       }}
     >
-      <span>
-        <strong style={{ color: COLORS.navy }}>{name}</strong> {meta && `— ${meta}`}
+      <span style={{ lineHeight: 1.5 }}>
+        <strong style={{ color: COLORS.navy }}>{name}</strong>{" "}
+        {meta && <span style={{ color: COLORS.navySoft }}>— {meta}</span>}
         {ownerName && (
           <span style={{ marginLeft: 8, fontSize: 11, color: COLORS.orange, fontWeight: 600 }}>
             👤 {ownerName}
@@ -493,8 +538,8 @@ function Row({
         )}
       </span>
       {url && (
-        <a href={url} target="_blank" rel="noreferrer" style={{ color: COLORS.navySoft, fontSize: 12 }}>
-          HubSpot
+        <a href={url} target="_blank" rel="noreferrer" className="cv-link" style={{ color: COLORS.navySoft, fontSize: 12, fontWeight: 500, flexShrink: 0, marginLeft: 12 }}>
+          HubSpot ↗
         </a>
       )}
     </div>
