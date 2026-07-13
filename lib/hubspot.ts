@@ -90,49 +90,58 @@ export type Task = {
  * Classification into "overdue" vs "upcoming" happens by the caller using
  * `isOverdue` and `dueDate`.
  */
+async function searchTasks(filters: any[], limit: number) {
+  const res = await fetchWithRetry(`${HUBSPOT_BASE}/crm/v3/objects/tasks/search`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      filterGroups: [{ filters }],
+      properties: ["hs_task_subject", "hs_timestamp", "hs_task_status", "hs_task_priority", "hs_task_type", "hs_task_is_overdue"],
+      sorts: [{ propertyName: "hs_timestamp", direction: "ASCENDING" }],
+      limit,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`HubSpot task search failed (${res.status}): ${body}`);
+  }
+  const data = await res.json();
+  return data.results ?? [];
+}
+
 export async function getOpenTasks(ownerId: string, limit = 250): Promise<Task[]> {
   const now = Date.now();
   const endOfTomorrow = new Date();
   endOfTomorrow.setDate(endOfTomorrow.getDate() + 2);
   endOfTomorrow.setHours(0, 0, 0, 0);
 
-  const res = await fetchWithRetry(`${HUBSPOT_BASE}/crm/v3/objects/tasks/search`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      // Two filter groups = OR'd together: overdue tasks, OR tasks due before
-      // the end of tomorrow (covers "upcoming today/tomorrow"). Each group's
-      // own filters are AND'd. hs_task_is_open wasn't a filterable/indexed
-      // property in testing, so we go back to the field we know works.
-      filterGroups: [
-        {
-          filters: [
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: ownerId },
-            { propertyName: "hs_task_is_overdue", operator: "EQ", value: "true" },
-          ],
-        },
-        {
-          filters: [
-            { propertyName: "hubspot_owner_id", operator: "EQ", value: ownerId },
-            { propertyName: "hs_task_status", operator: "NEQ", value: "COMPLETED" },
-            { propertyName: "hs_timestamp", operator: "LT", value: String(endOfTomorrow.getTime()) },
-            { propertyName: "hs_timestamp", operator: "GTE", value: String(now) },
-          ],
-        },
+  // Two separate, simple searches instead of one combined OR query — safer,
+  // and matches the exact overdue query we already confirmed works.
+  const [overdueRaw, upcomingRaw] = await Promise.all([
+    searchTasks(
+      [
+        { propertyName: "hubspot_owner_id", operator: "EQ", value: ownerId },
+        { propertyName: "hs_task_is_overdue", operator: "EQ", value: "true" },
       ],
-      properties: ["hs_task_subject", "hs_timestamp", "hs_task_status", "hs_task_priority", "hs_task_type", "hs_task_is_overdue"],
-      sorts: [{ propertyName: "hs_timestamp", direction: "ASCENDING" }],
-      limit,
-    }),
+      limit
+    ),
+    searchTasks(
+      [
+        { propertyName: "hubspot_owner_id", operator: "EQ", value: ownerId },
+        { propertyName: "hs_task_is_overdue", operator: "EQ", value: "false" },
+        { propertyName: "hs_timestamp", operator: "GTE", value: String(now) },
+        { propertyName: "hs_timestamp", operator: "LT", value: String(endOfTomorrow.getTime()) },
+      ],
+      limit
+    ),
+  ]);
+
+  const seen = new Set<string>();
+  const rawTasks = [...overdueRaw, ...upcomingRaw].filter((t) => {
+    if (seen.has(t.id)) return false;
+    seen.add(t.id);
+    return true;
   });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`HubSpot task search failed (${res.status}): ${body}`);
-  }
-
-  const data = await res.json();
-  const rawTasks: any[] = data.results ?? [];
   if (rawTasks.length === 0) return [];
 
   // Batch-resolve which deal each task is associated with (one call for all
