@@ -109,7 +109,7 @@ async function searchTasks(filters: any[], limit: number) {
   return data.results ?? [];
 }
 
-export async function getOpenTasks(ownerId: string, limit = 250): Promise<Task[]> {
+export async function getOpenTasks(ownerId: string, limit = 200): Promise<Task[]> {
   const now = Date.now();
   const endOfTomorrow = new Date();
   endOfTomorrow.setDate(endOfTomorrow.getDate() + 2);
