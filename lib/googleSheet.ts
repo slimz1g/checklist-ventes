@@ -121,7 +121,11 @@ export async function getClosingRows(): Promise<{ rows: ClosingRow[]; tabUsed: s
   // Google's A1 notation requires doubling an apostrophe that's part of the
   // sheet name itself (the tab is literally called "...juil '26").
   const escapedTab = tabName.replace(/'/g, "''");
-  const range = `'${escapedTab}'!A13:L200`; // starts after the header row we found at row 13
+  // Fetch from row 1 instead of assuming the rep sections always start at a
+  // fixed row 13 — that assumption broke once the sheet's layout shifted
+  // (e.g. a row was inserted above). Scanning from the top and detecting rep
+  // headers dynamically is more robust to that kind of change.
+  const range = `'${escapedTab}'!A1:L500`;
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range,
