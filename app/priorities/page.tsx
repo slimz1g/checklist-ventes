@@ -42,6 +42,8 @@ const FONT = `
 type Priorities = {
   generatedAt: string;
   sheetTabUsed?: string;
+  salesReps?: { id: string; name: string }[];
+  activeRep?: { id: string; name: string } | null;
   p1_closing: any[];
   p1b_entonnoir_no_followup: { total: number; items: any[] };
   p2_inbound_fresh: any[];
@@ -68,7 +70,7 @@ export default function PrioritesPage() {
   const [data, setData] = useState<Priorities | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<"mine" | "team">("mine");
+  const [repId, setRepId] = useState<string>("396827993"); // default: Slim Labassi
   const [pipelineFilter, setPipelineFilter] = useState<"tous" | "inbound" | "entonnoir" | "outbound">("tous");
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
   const [completingId, setCompletingId] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export default function PrioritesPage() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/priorities?scope=${scope}`)
+    fetch(`/api/priorities?repId=${repId}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.error) throw new Error(json.error);
@@ -102,7 +104,7 @@ export default function PrioritesPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [scope]);
+  }, [repId]);
 
   const byPipeline = (item: any) => pipelineFilter === "tous" || item.pipeline === pipelineFilter;
 
@@ -130,7 +132,7 @@ export default function PrioritesPage() {
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 24px 60px" }}>
         <div style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.orange, letterSpacing: 0.4 }}>
-          {new Date().toLocaleDateString("fr-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toUpperCase()} · SLIM LABASSI
+          {new Date().toLocaleDateString("fr-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toUpperCase()} · {(data?.activeRep?.name ?? "TOUTE L'ÉQUIPE").toUpperCase()}
         </div>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: COLORS.navy, margin: "6px 0 4px" }}>🎯 L'ordre du jour</h1>
         {data?.sheetTabUsed && (
@@ -139,31 +141,46 @@ export default function PrioritesPage() {
           </p>
         )}
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          {[
-            { key: "mine" as const, label: "👤 Mes deals" },
-            { key: "team" as const, label: "👥 Toute l'équipe" },
-          ].map((r) => (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          {(data?.salesReps ?? [{ id: "396827993", name: "Slim Labassi" }, { id: "17032870", name: "Alexandre Paquet" }]).map((rep) => (
             <button
-              key={r.key}
+              key={rep.id}
               className="cv-pill"
-              onClick={() => setScope(r.key)}
+              onClick={() => setRepId(rep.id)}
               style={{
-                background: scope === r.key ? COLORS.orange : COLORS.card,
-                color: scope === r.key ? "#fff" : COLORS.navySoft,
-                border: `1px solid ${scope === r.key ? COLORS.orange : COLORS.border}`,
+                background: repId === rep.id ? COLORS.orange : COLORS.card,
+                color: repId === rep.id ? "#fff" : COLORS.navySoft,
+                border: `1px solid ${repId === rep.id ? COLORS.orange : COLORS.border}`,
                 borderRadius: 8,
                 padding: "8px 16px",
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
                 fontFamily: "Inter, sans-serif",
-                boxShadow: scope === r.key ? "0 1px 3px rgba(242,107,33,0.3)" : "none",
+                boxShadow: repId === rep.id ? "0 1px 3px rgba(242,107,33,0.3)" : "none",
               }}
             >
-              {r.label}
+              👤 {rep.name}
             </button>
           ))}
+          <button
+            className="cv-pill"
+            onClick={() => setRepId("team")}
+            style={{
+              background: repId === "team" ? COLORS.orange : COLORS.card,
+              color: repId === "team" ? "#fff" : COLORS.navySoft,
+              border: `1px solid ${repId === "team" ? COLORS.orange : COLORS.border}`,
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "Inter, sans-serif",
+              boxShadow: repId === "team" ? "0 1px 3px rgba(242,107,33,0.3)" : "none",
+            }}
+          >
+            👥 Toute l'équipe
+          </button>
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
@@ -194,7 +211,7 @@ export default function PrioritesPage() {
           ))}
         </div>
 
-        {scope === "team" && (
+        {repId === "team" && (
           <div style={{ fontSize: 12, color: COLORS.navySoft, marginBottom: 16, fontStyle: "italic" }}>
             Mode "Toute l'équipe" : montre les deals de tous les reps, sans indiquer qui est propriétaire de chacun pour l'instant.
           </div>
