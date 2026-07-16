@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Check-list des ventes — LeadFox",
+  title: "Sales Hub | Leadfox",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
