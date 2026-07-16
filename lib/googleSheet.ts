@@ -9,6 +9,12 @@ import { google } from "googleapis";
 const SHEET_ID = "1-TicSgs0Ds6-_6DOZ1m-7Bm2LVCM5eqNcFoe4-lJZBI";
 const TAB_PREFIX = "Pipeline vendeur"; // the monthly tab is always named "Pipeline vendeur - <mois> '<an>"
 
+// The monthly/quarterly goal tab. NOTE: like the Pipeline vendeur tabs, this is
+// named per-quarter ("Q3") and will need to be updated by hand (this constant)
+// once a new quarter's tab is created, until that's automated the same way the
+// Pipeline vendeur tab detection is.
+const GOALS_TAB = "Objectif marketing/vente Q3 (Leadfox)";
+
 export type ClosingRow = {
   dealName: string;
   amount: string;
@@ -16,6 +22,13 @@ export type ClosingRow = {
   note: string;
   dateSuivi: string;
   repSection: string; // which "rep header" this row falls under in the sheet
+};
+
+export type MonthlyGoal = {
+  dealCountTarget: number;
+  dollarTarget: number;
+  monthLabel: string;
+  tabUsed: string;
 };
 
 function getAuth() {
@@ -58,6 +71,36 @@ function parseTabDate(title: string): { month: number; year: number } | null {
   let year = parseInt(match[2], 10);
   if (year < 100) year += 2000;
   return { month, year };
+}
+
+/**
+ * Parses a plain "juillet 2026" style header cell (full month name, full
+ * year, no apostrophe/abbreviation) into { month, year }, or null.
+ * This is the format used in the Objectif marketing/vente tab's header row,
+ * distinct from the "Pipeline vendeur - juil '26" tab-title format above.
+ */
+function parseMonthYearLabel(label: string): { month: number; year: number } | null {
+  const match = label.trim().toLowerCase().match(/^([a-zéûîèâ]+)\s+(\d{4})$/);
+  if (!match) return null;
+  const monthKey = match[1].normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const month = MONTH_MAP[monthKey] ?? MONTH_MAP[match[1]];
+  if (!month) return null;
+  return { month, year: parseInt(match[2], 10) };
+}
+
+/** Strips "$", spaces, and thousand separators, then parses a dollar figure. */
+function parseMoney(value: string | undefined): number {
+  if (!value) return 0;
+  const cleaned = String(value).replace(/[^0-9,.\-]/g, "").replace(",", ".");
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
+/** Parses a plain number cell (deal counts), tolerating a comma decimal separator. */
+function parseCount(value: string | undefined): number {
+  if (!value) return 0;
+  const n = parseFloat(String(value).replace(",", "."));
+  return isNaN(n) ? 0 : n;
 }
 
 /**
@@ -164,4 +207,60 @@ export async function getClosingRows(): Promise<{ rows: ClosingRow[]; tabUsed: s
   }
 
   return { rows: parsed, tabUsed: tabName };
+}
+
+/**
+ * Reads this month's team-wide target from the "Objectif marketing/vente" tab:
+ * - Row 14 ("Total") = deal-count target
+ * - Row 36 ("Total VENTE") = dollar target
+ * Both are read from whichever column's row-1 header matches the current
+ * month/year (e.g. "juillet 2026"), rather than a hardcoded column letter,
+ * since the sheet grows sideways every month/quarter.
+ *
+ * Returns null if the current month's column can't be found (e.g. the sheet
+ * hasn't been extended into the current month yet) — the caller should treat
+ * that as "no goal available yet" rather than an error.
+ */
+export async function getMonthlyGoal(): Promise<MonthlyGoal | null> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const escapedTab = GOALS_TAB.replace(/'/g, "''");
+
+  // Scan a wide range on row 1 for the month/year header — column position
+  // shifts as new months get added, so we don't assume a fixed column.
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `'${escapedTab}'!A1:CZ1`,
+  });
+  const headerRow = headerRes.data.values?.[0] ?? [];
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  let targetColIndex = -1;
+  for (let i = 0; i < headerRow.length; i++) {
+    const parsed = parseMonthYearLabel(String(headerRow[i] ?? ""));
+    if (parsed && parsed.month === currentMonth && parsed.year === currentYear) {
+      targetColIndex = i;
+      break;
+    }
+  }
+  if (targetColIndex === -1) return null;
+
+  const [row14Res, row36Res] = await Promise.all([
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `'${escapedTab}'!A14:CZ14` }),
+    sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `'${escapedTab}'!A36:CZ36` }),
+  ]);
+
+  const row14 = row14Res.data.values?.[0] ?? [];
+  const row36 = row36Res.data.values?.[0] ?? [];
+
+  return {
+    dealCountTarget: parseCount(row14[targetColIndex]),
+    dollarTarget: parseMoney(row36[targetColIndex]),
+    monthLabel: String(headerRow[targetColIndex] ?? ""),
+    tabUsed: GOALS_TAB,
+  };
 }
