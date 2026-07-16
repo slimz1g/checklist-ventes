@@ -150,7 +150,6 @@ function ActionRow({
   meta: string;
   url: string | null;
   tone: "red" | "amber" | "indigo" | "blue";
-  key?: string;
 }) {
   const toneColor = { red: COLORS.red, amber: COLORS.amber, indigo: COLORS.indigo, blue: COLORS.blue }[tone];
   return (
