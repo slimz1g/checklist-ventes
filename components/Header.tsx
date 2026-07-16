@@ -44,7 +44,9 @@ export default function Header() {
         flexWrap: "wrap",
       }}
     >
-      <img src={LOGO_SRC} alt="LeadFox" style={{ height: 40 }} />
+      <Link href="/" style={{ display: "flex", alignItems: "center" }}>
+        <img src={LOGO_SRC} alt="LeadFox" style={{ height: 40 }} />
+      </Link>
 
       {NAV_ITEMS.map((item) => {
         const isActive = pathname === item.href;
