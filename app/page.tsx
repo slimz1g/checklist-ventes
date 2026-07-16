@@ -203,6 +203,10 @@ export default function HomePage() {
   >(null);
 
   useEffect(() => {
+    document.title = "Sales Hub Homepage | Leadfox";
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     setError(null);
     const query = teamView ? "team" : repId;
