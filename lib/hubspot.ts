@@ -281,6 +281,38 @@ export async function getOwnersMap(): Promise<Record<string, string>> {
   return map;
 }
 
+/**
+ * Team-wide closed-won deal count + total $ amount for the current calendar
+ * month, across all pipelines — the "actual" side of the Objectif du mois
+ * comparison against the Google Sheet's team target for the same month.
+ *
+ * Uses `closedate` (when the deal actually closed) rather than `createdate`,
+ * since the goal is about deals won *this month*, not deals started this month.
+ */
+export async function getClosedWonThisMonth(): Promise<{ count: number; amount: number }> {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+
+  const { results } = await searchDeals(
+    [
+      {
+        filters: [
+          { propertyName: "hs_is_closed_won", operator: "EQ", value: "true" },
+          { propertyName: "closedate", operator: "GTE", value: String(startOfMonth) },
+          { propertyName: "closedate", operator: "LT", value: String(startOfNextMonth) },
+        ],
+      },
+    ],
+    ["amount", "closedate", "dealname"],
+    200
+  );
+
+  const count = results.length;
+  const amount = results.reduce((sum, d) => sum + (parseFloat(d.properties.amount || "0") || 0), 0);
+  return { count, amount };
+}
+
 // Pipeline + stage IDs discovered during the design phase (see reference doc).
 export const PIPELINES = {
   ENTONNOIR: "2041621",
